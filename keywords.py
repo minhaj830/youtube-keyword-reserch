@@ -2,7 +2,7 @@ import streamlit as st
 from pytrends.request import TrendReq
 import random
 
-st.title("YouTube Keyword Finder")
+st.title("YouTube Keyword Finder (No YouTube API Needed)")
 
 # User input for a seed keyword specifically for YouTube
 keyword_input = st.text_input("Enter a seed keyword (in English) for YouTube:")
@@ -23,22 +23,20 @@ if st.button("Find YouTube Keywords"):
     try:
         # Initialize pytrends with YouTube property
         pytrends = TrendReq(hl='en-US', tz=360)
-        # Set gprop to 'youtube' for YouTube-specific trends
         pytrends.build_payload([keyword_input], timeframe='today 12-m', gprop='youtube')
         
         # Get related queries for the given keyword
         related = pytrends.related_queries().get(keyword_input, {})
         
         keyword_list = []
-        # Process "top" related queries if available
+        # Check if 'top' data is available
         if "top" in related and related["top"] is not None:
             top_df = related["top"]
-            # Apply minimum interest score filter if set
             if min_interest:
                 top_df = top_df[top_df['value'] >= min_interest]
             keyword_list.extend(top_df['query'].tolist())
         
-        # Process "rising" related queries if available
+        # Check if 'rising' data is available
         if "rising" in related and related["rising"] is not None:
             rising_df = related["rising"]
             keyword_list.extend(rising_df['query'].tolist())
@@ -47,10 +45,13 @@ if st.button("Find YouTube Keywords"):
         keyword_list = list(set(keyword_list))
         
         if not keyword_list:
-            st.warning("No related YouTube keywords found with the given criteria.")
+            st.warning("⚠️ No related YouTube keywords found. Try another keyword or adjust filters.")
         else:
-            st.success(f"Found {len(keyword_list)} related YouTube keywords:")
+            st.success(f"✅ Found {len(keyword_list)} related YouTube keywords:")
             for kw in keyword_list[:max_results]:
                 st.write(kw)
+
+    except IndexError:
+        st.error("❌ Error: No data available for the provided keyword. Please try a different one.")
     except Exception as e:
-        st.error(f"An error occurred: {str(e)}")
+        st.error(f"❌ Unexpected error: {str(e)}")
