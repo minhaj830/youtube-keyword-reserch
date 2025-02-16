@@ -1,57 +1,69 @@
 import streamlit as st
 from pytrends.request import TrendReq
 import random
+import time
 
-st.title("YouTube Keyword Finder (No YouTube API Needed)")
+st.title("🔍 YouTube Keyword Finder (No YouTube API)")
 
-# User input for a seed keyword specifically for YouTube
+# User input
 keyword_input = st.text_input("Enter a seed keyword (in English) for YouTube:")
+region = st.text_input("Enter Country Code (e.g., US, IN, GB) - optional:", "").strip().upper()
 
-# Optional filter: Minimum interest score (Google Trends score)
-min_interest = st.number_input("Minimum Interest Score (optional, 0 to ignore):", min_value=0, value=50)
-
-# Maximum number of keywords to display
+# Filters
+min_interest = st.number_input("Minimum Interest Score (optional, 0 to ignore):", min_value=0, value=0)
 max_results = st.number_input("Maximum Number of Keywords to Display:", min_value=1, value=20)
 
-# If no keyword is provided, choose one randomly from a predefined list
+# If no keyword provided, pick a random one
+random_keywords = ["technology", "gaming", "music", "vlog", "reviews", "tutorial", "comedy", "travel", "food", "fitness"]
 if not keyword_input:
-    random_keywords = ["technology", "gaming", "music", "vlog", "reviews", "tutorial", "comedy", "travel", "food", "fitness"]
     keyword_input = random.choice(random_keywords)
-    st.info(f"No keyword provided. Using random keyword: **{keyword_input}**")
+    st.info(f"⚠️ No keyword provided. Using random keyword: **{keyword_input}**")
 
-if st.button("Find YouTube Keywords"):
+def fetch_keywords(seed_keyword):
+    """Fetch YouTube-related keywords using Google Trends."""
     try:
-        # Initialize pytrends with YouTube property
         pytrends = TrendReq(hl='en-US', tz=360)
-        pytrends.build_payload([keyword_input], timeframe='today 12-m', gprop='youtube')
-        
-        # Get related queries for the given keyword
-        related = pytrends.related_queries().get(keyword_input, {})
-        
-        keyword_list = []
-        # Check if 'top' data is available
+        geo = region if region else ""
+        pytrends.build_payload([seed_keyword], timeframe='today 12-m', gprop='youtube', geo=geo)
+
+        related = pytrends.related_queries().get(seed_keyword, {})
+        keywords = []
+
+        # Extract top queries
         if "top" in related and related["top"] is not None:
             top_df = related["top"]
-            if min_interest:
+            if min_interest > 0:
                 top_df = top_df[top_df['value'] >= min_interest]
-            keyword_list.extend(top_df['query'].tolist())
-        
-        # Check if 'rising' data is available
+            keywords += top_df['query'].tolist()
+
+        # Extract rising queries
         if "rising" in related and related["rising"] is not None:
             rising_df = related["rising"]
-            keyword_list.extend(rising_df['query'].tolist())
-        
-        # Remove duplicates
-        keyword_list = list(set(keyword_list))
-        
-        if not keyword_list:
-            st.warning("⚠️ No related YouTube keywords found. Try another keyword or adjust filters.")
-        else:
-            st.success(f"✅ Found {len(keyword_list)} related YouTube keywords:")
-            for kw in keyword_list[:max_results]:
-                st.write(kw)
+            keywords += rising_df['query'].tolist()
 
-    except IndexError:
-        st.error("❌ Error: No data available for the provided keyword. Please try a different one.")
+        return list(set(keywords))  # Remove duplicates
+
     except Exception as e:
-        st.error(f"❌ Unexpected error: {str(e)}")
+        st.error(f"❌ Error: {str(e)}")
+        return []
+
+# Fetch and display keywords
+if st.button("Find YouTube Keywords"):
+    retries = 5  # Maximum retries for failed keywords
+    attempts = 0
+    keywords_found = []
+
+    while attempts < retries and not keywords_found:
+        keywords_found = fetch_keywords(keyword_input)
+        if not keywords_found:
+            st.warning(f"⚠️ No data for keyword '{keyword_input}'. Retrying with a new random keyword...")
+            keyword_input = random.choice(random_keywords)
+            time.sleep(2)  # Pause to avoid triggering rate limits
+        attempts += 1
+
+    if keywords_found:
+        st.success(f"✅ Found {len(keywords_found)} keywords:")
+        for kw in keywords_found[:max_results]:
+            st.write(f"- {kw}")
+    else:
+        st.error("❌ No keywords found after multiple attempts. Please try again later.")
