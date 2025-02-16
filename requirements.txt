@@ -1,1 +1,1 @@
-pip install pytrends
+pytrends
